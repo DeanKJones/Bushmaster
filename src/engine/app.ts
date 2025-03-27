@@ -3,6 +3,11 @@ import { Renderer } from "./render/renderer";
 import { EventSystem } from "./events/eventSystem";
 import { RenderContext } from "./render/renderContext";
 
+import { initializeVDBSystem, createVDBTestUI } from "./voxel/integration/integration";
+import { initializeVOXSystem, createVOXTestUI } from "./voxel/integration/voxIntegration";
+import { VoxManager } from "./voxel/voxManager";
+import { VDBManager } from "./voxel/vdbManager";
+
 export class App {
     private canvases: Map<string, HTMLCanvasElement>;
 
@@ -10,6 +15,10 @@ export class App {
 
     private renderer: Renderer;
     private renderContext: RenderContext;
+
+    // VDB system
+    private vdbManager: VDBManager;
+    private voxManager: VoxManager;
 
     private initialized: boolean = false;
     private lastTime: number = performance.now();
@@ -28,8 +37,18 @@ export class App {
         // Initialize renderer
         this.renderer = new Renderer(mainViewport!, this.renderContext);
         this.uiManager = new UIManager(undefined, this.renderContext);
+
+        // Initialize VDB system
+        this.vdbManager = initializeVDBSystem();
+        this.voxManager = initializeVOXSystem();
+        
+        // Create test UIs
+        createVDBTestUI();
+        createVOXTestUI();
         
         (window as any).app = this;
+        (window as any).vdbManager = this.vdbManager; // Expose for console debugging
+        (window as any).voxManager = this.voxManager; // Expose for console debugging
         
         // Start renderer initialization
         this.renderer.Initialize().then(() => {
