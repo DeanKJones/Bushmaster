@@ -4,7 +4,7 @@
  * https://github.com/ephtracy/voxel-model/blob/master/MagicaVoxel-file-format-vox.txt
  */
 
-import { Vec3, Material } from './vdbTypes';
+import { Vec3, Material } from '../core/types';
 
 // Magic number for .vox files: "VOX "
 export const VOX_MAGIC = 0x20584F56;

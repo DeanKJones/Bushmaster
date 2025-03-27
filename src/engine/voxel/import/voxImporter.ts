@@ -2,12 +2,12 @@
  * Importer for MagicaVoxel .vox files
  * Converts .vox models to VDB format for use in the engine
  */
+import { Vec3 } from '../core/types';
 import { parseVoxFile } from './voxParser';
 import { convertToVDBFormat, createVoxelKey, parseVoxelKey, isVoxelOnBoundary } from '../util/voxUtils';
 import { ConvertedVoxModel } from '../type/voxTypes';
 import { 
   VDBVolume, 
-  Vec3, 
   VDBVolumeType,
   //VDBRoot, 
   //VDBLeafNode, 

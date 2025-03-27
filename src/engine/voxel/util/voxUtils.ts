@@ -7,7 +7,7 @@ import {
     ConvertedVoxModel,
     DEFAULT_PALETTE
   } from '../type/voxTypes';
-  import { Vec3, Material } from '../type/vdbTypes';
+  import { Vec3, Material } from '../core/types';
   
   /**
    * Create a key for the voxel position map

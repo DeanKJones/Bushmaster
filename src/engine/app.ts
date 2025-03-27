@@ -3,10 +3,9 @@ import { Renderer } from "./render/renderer";
 import { EventSystem } from "./events/eventSystem";
 import { RenderContext } from "./render/renderContext";
 
-import { initializeVDBSystem, createVDBTestUI } from "./voxel/integration/integration";
-import { initializeVOXSystem, createVOXTestUI } from "./voxel/integration/voxIntegration";
-import { VoxManager } from "./voxel/voxManager";
-import { VDBManager } from "./voxel/vdbManager";
+// Import the unified voxel system
+import { initializeVoxelSystem, createVoxelTestUI } from "./voxel/integration/voxelIntegration";
+import { VoxelManager } from "./voxel/voxelManager";
 
 export class App {
     private canvases: Map<string, HTMLCanvasElement>;
@@ -16,9 +15,8 @@ export class App {
     private renderer: Renderer;
     private renderContext: RenderContext;
 
-    // VDB system
-    private vdbManager: VDBManager;
-    private voxManager: VoxManager;
+    // Unified voxel system
+    private voxelManager: VoxelManager;
 
     private initialized: boolean = false;
     private lastTime: number = performance.now();
@@ -38,17 +36,15 @@ export class App {
         this.renderer = new Renderer(mainViewport!, this.renderContext);
         this.uiManager = new UIManager(undefined, this.renderContext);
 
-        // Initialize VDB system
-        this.vdbManager = initializeVDBSystem();
-        this.voxManager = initializeVOXSystem();
+        // Initialize unified voxel system
+        this.voxelManager = initializeVoxelSystem();
         
-        // Create test UIs
-        createVDBTestUI();
-        createVOXTestUI();
+        // Create test UI
+        createVoxelTestUI();
         
+        // Expose key components for debugging in the console
         (window as any).app = this;
-        (window as any).vdbManager = this.vdbManager; // Expose for console debugging
-        (window as any).voxManager = this.voxManager; // Expose for console debugging
+        (window as any).voxelManager = this.voxelManager; // Expose for console debugging
         
         // Start renderer initialization
         this.renderer.Initialize().then(() => {
@@ -81,7 +77,10 @@ export class App {
         // Update render context with frame data
         this.renderContext.update(deltaTime);
         
-        // Update simulation with delta time
+        // Update active voxel models
+        // This would be where we process voxel operations in a real implementation
+        
+        // Render the scene
         this.renderer.render(deltaTime);
         this.uiManager.updateUI();
             

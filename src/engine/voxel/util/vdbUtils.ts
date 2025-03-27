@@ -1,8 +1,8 @@
 /**
  * Utility functions for VDB operations
  */
+import { Vec3 } from '../core/types';
 import { 
-    Vec3, 
     CoordKey, 
     VDBNodeType, 
     VDBLeafNode, 

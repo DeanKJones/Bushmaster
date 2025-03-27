@@ -2,6 +2,7 @@
  * Core VDB data structure types for the voxel engine
  * These provide the foundation for storing and manipulating VDB volumes
  */
+import { Vec3, Matrix4x4 } from '../core/types';
 
 // Configuration constants
 export const VDB_CONFIG = {
@@ -9,15 +10,6 @@ export const VDB_CONFIG = {
     INTERNAL_DIM: 4,          // 4³ child nodes per internal node
     DEFAULT_TRANSFORM: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1] as const
   };
-  
-  // Basic math types
-  export type Vec3 = [number, number, number];
-  export type Matrix4x4 = [
-    number, number, number, number,
-    number, number, number, number,
-    number, number, number, number,
-    number, number, number, number
-  ];
   
   // Coordinate key for hash tables
   export type CoordKey = string; // Format: "x,y,z"
