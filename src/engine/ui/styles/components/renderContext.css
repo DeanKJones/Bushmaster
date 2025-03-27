@@ -1,0 +1,42 @@
+
+.render-context {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    background-color: rgba(25, 25, 25, 0.7);
+    border-radius: 5px;
+    padding: 8px 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    width: auto;
+    min-width: 140px;
+    backdrop-filter: blur(3px);
+    z-index: 90;
+    border-left: 2px solid rgba(79, 133, 214, 0.7);
+    font-size: 12px;
+}
+
+.render-context-header {
+    font-size: 12px;
+    color: #e0e0e0;
+    font-weight: bold;
+    border-bottom: 1px solid rgba(79, 133, 214, 0.5);
+    padding-bottom: 4px;
+    margin-bottom: 6px;
+    text-align: left;
+}
+
+.render-stat {
+    display: flex;
+    justify-content: space-between;
+    margin: 4px 0;
+    font-family: monospace;
+}
+
+.stat-name {
+    color: #aaa;
+    margin-right: 10px;
+}
+
+.stat-value {
+    color: #4f85d6;
+}

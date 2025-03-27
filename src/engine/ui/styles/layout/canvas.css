@@ -1,0 +1,18 @@
+canvas {
+  display: block;
+}
+
+#gfx-main {
+  width: 100vw;      /* Full viewport width */
+  height: 100vh;     /* Full viewport height */
+  position: absolute;
+  top: 0;
+  left: 0;
+  margin: 0;
+  padding: 0;
+}
+
+#settings {
+  background-color: #1a1a1a;
+  margin-bottom: 15px;
+}

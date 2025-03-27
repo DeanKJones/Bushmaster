@@ -1,0 +1,29 @@
+#container {
+    position: relative;
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
+}
+
+#canvas-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+}
+
+#scene-container {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+#divider {
+    display: none;
+}
+
+#key-label, #mouse-position {
+    margin-top: 10px;
+}
