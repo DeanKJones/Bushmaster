@@ -2,7 +2,6 @@
 import { ScreenBufferDescription } from "./screenBufferDescription";
 
 export class BufferManager {
-
     device: GPUDevice;
     canvas: HTMLCanvasElement;
 

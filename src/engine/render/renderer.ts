@@ -1,12 +1,10 @@
 import { PipelineManager } from "./pipelineDescriptors/pipelineManager";
 import { BufferManager } from "./buffers/bufferManager";
-
-// Remdering
 import { RenderContext } from "./renderContext";
 
 export class Renderer {
     canvas: HTMLCanvasElement;
-
+    
     adapter!: GPUAdapter;
     device!: GPUDevice;
     context!: GPUCanvasContext;
@@ -14,9 +12,20 @@ export class Renderer {
 
     bufferManager!: BufferManager;
     pipelineManager!: PipelineManager;
+    
+    private useBackupRenderer: boolean = false;
+
+    // Camera parameters
+    private camera = {
+        position: [0, 3, 5] as [number, number, number],
+        target: [0, 0, 0] as [number, number, number],
+        up: [0, 1, 0] as [number, number, number],
+        fov: 60 * Math.PI / 180,
+        near: 0.1,
+        far: 100.0
+    };
 
     initialized: boolean = false;
-    texturesLoaded: boolean = false;
 
     constructor(canvas: HTMLCanvasElement, private renderContext?: RenderContext) {
         this.canvas = canvas;
@@ -29,6 +38,45 @@ export class Renderer {
         this.pipelineManager = new PipelineManager(this.device, this.bufferManager);
         
         this.initialized = true;
+    }
+
+    render(deltaTime: number) {
+        if (!this.initialized) {
+            console.warn("Renderer not initialized yet");
+            return;
+        }
+        
+        // Update render context
+        this.renderContext?.update(deltaTime);
+        
+        // Choose rendering method
+        if (this.useBackupRenderer) {
+            this.renderDefault(); // test compute shader pipeline
+        } else {
+            this.renderDefault(); // nothing at the moment
+        }
+    }
+    
+    renderDefault() {
+        // Existing gradient rendering method (using computePipeline for backup)
+        const commandEncoder = this.device.createCommandEncoder();
+        
+        const ray_trace_pass = commandEncoder.beginComputePass();
+        ray_trace_pass.setPipeline(this.pipelineManager.computePipeline.computePipeline);
+        ray_trace_pass.setBindGroup(0, this.pipelineManager.computePipeline.computeBindGroup);
+        ray_trace_pass.dispatchWorkgroups(
+            this.canvas.width * 4,
+            this.canvas.height * 4, 1
+        );
+        ray_trace_pass.end();
+        
+        this.renderToScreen(commandEncoder, this.pipelineManager.screenPipeline.screenBindGroup);
+    }
+    
+    // Toggle method returns the current rendering mode
+    public toggleRenderer(): boolean {
+        this.useBackupRenderer = !this.useBackupRenderer;
+        return this.useBackupRenderer;
     }
 
     async setupDevice() {
@@ -80,52 +128,29 @@ export class Renderer {
             console.error("Error during WebGPU setup:", error);
         }
     }
-    
-
-    render(deltaTime: number) {
-        if (!this.initialized) {
-            console.warn("Renderer not initialized yet");
-            return;
-        }
         
-        // Update all settings
-        this.renderContext?.update(deltaTime);
-        
-        // Render based on the current mode
-        this.renderDefault()
-    }
-
-    renderDefault() {
-        const commandEncoder = this.device.createCommandEncoder();
-        
-        const ray_trace_pass = commandEncoder.beginComputePass();
-        ray_trace_pass.setPipeline(this.pipelineManager.computePipeline.computePipeline);
-        ray_trace_pass.setBindGroup(0, this.pipelineManager.computePipeline.computeBindGroup);
-        ray_trace_pass.dispatchWorkgroups(
-            this.canvas.width * 4,
-            this.canvas.height * 4, 1
-        );
-        ray_trace_pass.end();
-        
-        this.renderToScreen(commandEncoder, this.pipelineManager.screenPipeline.screenBindGroup);
-    }
-
     private renderToScreen(commandEncoder: GPUCommandEncoder, bindGroup: GPUBindGroup) {
-        const textureView = this.context.getCurrentTexture().createView();
-        const renderpass = commandEncoder.beginRenderPass({
-            colorAttachments: [{
-                view: textureView,
-                clearValue: {r: 0.0, g: 0.0, b: 0.0, a: 1.0},
-                loadOp: "clear",
-                storeOp: "store"
-            }]
-        });
+        const renderPassDescriptor: GPURenderPassDescriptor = {
+            colorAttachments: [
+                {
+                    view: this.context.getCurrentTexture().createView(),
+                    loadOp: 'clear',
+                    storeOp: 'store',
+                    clearValue: { r: 0.05, g: 0.05, b: 0.05, a: 1.0 }
+                }
+            ]
+        };
         
-        renderpass.setPipeline(this.pipelineManager.screenPipeline.screenPipeline);
-        renderpass.setBindGroup(0, bindGroup);
-        renderpass.draw(6, 1, 0, 0);
-        renderpass.end();
+        const renderPass = commandEncoder.beginRenderPass(renderPassDescriptor);
+        renderPass.setPipeline(this.pipelineManager.screenPipeline.screenPipeline);
+        renderPass.setBindGroup(0, bindGroup);
+        renderPass.draw(6, 1, 0, 0);
+        renderPass.end();
         
         this.device.queue.submit([commandEncoder.finish()]);
+    }
+
+    getCamera() {
+        return this.camera;
     }
 }

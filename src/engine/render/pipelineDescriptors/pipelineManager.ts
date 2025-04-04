@@ -3,7 +3,6 @@ import { screenPipelineDescriptor } from "./screenPipelineDescription";
 import { computePipelineDescriptor } from "./computePipelineDescription";
 
 export class PipelineManager {
-
     device: GPUDevice;
     
     screenPipeline!: screenPipelineDescriptor;

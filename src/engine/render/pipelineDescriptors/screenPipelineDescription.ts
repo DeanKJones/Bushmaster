@@ -1,5 +1,5 @@
 import { BufferManager } from "../buffers/bufferManager";
-import screenShader from "../../shaders/screenShader.wgsl"
+import screenShader from "../../shaders/screen/screenShader.wgsl"
 
 
 export class screenPipelineDescriptor {

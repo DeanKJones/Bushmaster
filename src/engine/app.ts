@@ -2,10 +2,7 @@ import { UIManager } from "./ui/uiManager";
 import { Renderer } from "./render/renderer";
 import { EventSystem } from "./events/eventSystem";
 import { RenderContext } from "./render/renderContext";
-
-// Import the unified voxel system
-import { initializeVoxelSystem, createVoxelTestUI } from "./voxel/integration/voxelIntegration";
-import { VoxelManager } from "./voxel/voxelManager";
+import { CameraController } from "./events/cameraController";
 
 export class App {
     private canvases: Map<string, HTMLCanvasElement>;
@@ -14,9 +11,6 @@ export class App {
 
     private renderer: Renderer;
     private renderContext: RenderContext;
-
-    // Unified voxel system
-    private voxelManager: VoxelManager;
 
     private initialized: boolean = false;
     private lastTime: number = performance.now();
@@ -34,28 +28,33 @@ export class App {
     
         // Initialize renderer
         this.renderer = new Renderer(mainViewport!, this.renderContext);
-        this.uiManager = new UIManager(undefined, this.renderContext);
-
-        // Initialize unified voxel system
-        this.voxelManager = initializeVoxelSystem();
-        
-        // Create test UI
-        createVoxelTestUI();
+        this.uiManager = new UIManager(undefined, this.renderContext, this.renderer);
         
         // Expose key components for debugging in the console
         (window as any).app = this;
-        (window as any).voxelManager = this.voxelManager; // Expose for console debugging
         
         // Start renderer initialization
         this.renderer.Initialize().then(() => {
             this.initialized = true;
             console.log("Renderer initialized successfully");
             
+            // Initialize camera controller
+            this.initializeCameraController();
+            
             this.run();
         }).catch(error => {
             console.error("Failed to initialize renderer:", error);
         });
     }
+    
+    private initializeCameraController() {
+        // Add camera controller for SDF scene interaction
+        const cameraController = new CameraController(this.renderer.getCamera());
+        
+        // Expose for debugging
+        (window as any).cameraController = cameraController;
+    }
+    
 
     /**
      * Main animation loop
