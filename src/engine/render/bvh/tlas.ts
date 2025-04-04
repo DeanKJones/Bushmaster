@@ -1,160 +1,201 @@
-import { vec3 } from 'gl-matrix'
-import { BLAS } from './blas'
-import { BLASInstance } from './blasInstance'
-import { AABB } from '../../voxel/aabb'
+import { AABB } from '../../voxel/util/aabb';
+import { BLASInstance, TLASNode } from './bvhStructures';
+import { BLAS } from './blas';
 
-
-export interface TLASNode {
-    aabb: AABB;
-    left: number;
-    right: number;
-    blas: number; // Index of the BLAS instance
-}
-
+/**
+ * Top-Level Acceleration Structure for organizing BLAS instances
+ */
 export class TLAS {
-    m_tlasNodes: TLASNode[]
-    m_offsetToMeshId: Map<number, number>
-    m_nodeUsed: number
-    m_blasInstances: BLASInstance[]
-    m_meshIDtoBLAS: Map<number, BLAS>
-    constructor (
+    /**
+     * All nodes in the TLAS tree
+     */
+    nodes: TLASNode[];
+    
+    /**
+     * BLAS instances in the scene
+     */
+    blasInstances: BLASInstance[];
+    
+    /**
+     * Map from BLAS offset to BLAS instance
+     */
+    private blasOffsetMap: Map<number, BLAS>;
+    
+    /**
+     * Current count of used nodes
+     */
+    private nodeCount: number = 1; // Start at 1, index 0 reserved for root
+    
+    constructor(
         blasInstances: BLASInstance[],
-        blasOffsetToMeshId: Map<number, number>,
-        meshIDToBLAS: Map<number, BLAS>
+        blasMap: Map<number, BLAS>
     ) {
-        this.m_blasInstances = blasInstances
-        this.m_tlasNodes = new Array<TLASNode>(blasInstances.length * 2)
-        this.m_nodeUsed = 1 // Start at 1 to keep root node empty
-        this.m_offsetToMeshId = blasOffsetToMeshId
-        this.m_meshIDtoBLAS = meshIDToBLAS
-        this._build()
+        this.blasInstances = blasInstances;
+        this.blasOffsetMap = blasMap;
+        
+        // Allocate space for nodes (2N-1 for a binary tree with N leaves)
+        const maxNodes = Math.max(1, blasInstances.length * 2);
+        this.nodes = new Array<TLASNode>(maxNodes);
+        
+        // Build the tree
+        this.buildTree();
     }
-
-    private _build (): void {
-        // Initialize TLAS nodes with BLAS instances
-        for (let i = 0; i < this.m_blasInstances.length; ++i) {
-            const meshID = this.m_offsetToMeshId.get(this.m_blasInstances[i].blasOffset)
-            if (meshID === undefined) { throw new Error('Mesh ID not found') }
-
-            const blas = this.m_meshIDtoBLAS.get(meshID)
-            if (blas === undefined) { throw new Error('BLAS not found') }
-
-            // Clone and transform the BLAS's AABB
-            const blasAABB = blas.m_nodes[0].aabb.clone()
-            const transform = this.m_blasInstances[i].transform
-            blasAABB.applyMatrix4(transform)
-
-            // Create a TLASNode for this BLAS instance
-            const tlasNode: TLASNode = {
+    
+    /**
+     * Build the TLAS tree
+     */
+    private buildTree(): void {
+        // Init leaf nodes for each BLAS instance
+        const leafNodes: number[] = [];
+        
+        for (let i = 0; i < this.blasInstances.length; i++) {
+            const instance = this.blasInstances[i];
+            const blas = this.blasOffsetMap.get(instance.blasOffset);
+            
+            if (!blas) {
+                console.error(`BLAS not found for offset ${instance.blasOffset}`);
+                continue;
+            }
+            
+            // Get the BLAS root AABB and transform it
+            const blasAABB = blas.nodes[blas.rootNodeIdx].aabb.clone();
+            blasAABB.applyMatrix(instance.transform);
+            
+            // Create a TLAS leaf node for this instance
+            const nodeIdx = this.nodeCount++;
+            this.nodes[nodeIdx] = {
                 aabb: blasAABB,
-                left: 0,
-                right: 0,
-                blas: i, // Leaf node references the BLAS index
-            }
-
-            this.m_tlasNodes[this.m_nodeUsed++] = tlasNode
+                left: 0, // Leaf node
+                right: 0, // Leaf node
+                blasInstanceIndex: i
+            };
+            
+            leafNodes.push(nodeIdx);
         }
-
-        const leafIndices = Array.from({ length: this.m_blasInstances.length }, (_, i) => i + 1)
-
-        const rootIdx = this._buildRecursiveWithSAH(leafIndices)
-
-        // Set the root node of the TLAS
-        this.m_tlasNodes[0] = this.m_tlasNodes[rootIdx]
+        
+        // Build the internal nodes using surface area heuristic (SAH)
+        const rootIdx = this.buildHierarchy(leafNodes);
+        
+        // Copy the root node to index 0
+        this.nodes[0] = { ...this.nodes[rootIdx] };
     }
     
-    private _findBestSplit (indices: number[]): { axis: number; splitIndex: number } {
-        let bestAxis = -1
-        let bestSplit = -1
-        let minCost = Infinity
-    
-        for (let axis = 0; axis < 3; axis++) {
-            // Sort indices based on centroid along the current axis
-            indices.sort((a, b) => {
-                const centroidA = vec3.scale(vec3.create(), vec3.add(vec3.create(), this.m_tlasNodes[a].aabb.bmin, this.m_tlasNodes[a].aabb.bmax), 0.5)[axis]
-                const centroidB = vec3.scale(vec3.create(), vec3.add(vec3.create(), this.m_tlasNodes[b].aabb.bmin, this.m_tlasNodes[b].aabb.bmax), 0.5)[axis]
-                return centroidA - centroidB
-            })
-    
-            for (let i = 1; i < indices.length; i++) {
-                const left = indices.slice(0, i)
-                const right = indices.slice(i)
-    
-                // Compute bounding boxes for left and right subsets
-                let leftAABB = this.m_tlasNodes[left[0]].aabb.clone()
-                for (let j = 1; j < left.length; j++) {
-                    leftAABB = this._combineAABB(leftAABB, this.m_tlasNodes[left[j]].aabb)
-                }
-    
-                let rightAABB = this.m_tlasNodes[right[0]].aabb.clone()
-                for (let j = 1; j < right.length; j++) {
-                    rightAABB = this._combineAABB(rightAABB, this.m_tlasNodes[right[j]].aabb)
-                }
-    
-                const cost = this._computeSurfaceArea(leftAABB) + this._computeSurfaceArea(rightAABB)
-    
-                if (cost < minCost) {
-                    minCost = cost
-                    bestAxis = axis
-                    bestSplit = i
-                }
-            }
+    /**
+     * Build the TLAS hierarchy using Surface Area Heuristic
+     */
+    private buildHierarchy(nodeIndices: number[]): number {
+        // Base case: if there's just one node, return it
+        if (nodeIndices.length === 1) {
+            return nodeIndices[0];
         }
-    
-        return { axis: bestAxis, splitIndex: bestSplit }
-    }
-    
-    private _buildRecursiveWithSAH (indices: number[]): number {
-        if (indices.length === 1) {
-            return indices[0]
-        }
-    
+        
         // Find the best split using SAH
-        const { axis, splitIndex } = this._findBestSplit(indices)
-    
-        let leftIndices: number[]
-        let rightIndices: number[]
-    
+        const { axis, splitIndex } = this.findBestSplit(nodeIndices);
+        
+        // Split the nodes
+        let leftIndices: number[];
+        let rightIndices: number[];
+        
         if (axis === -1 || splitIndex === -1) {
-            // Fallback to median split if no good split is found
-            const mid = Math.floor(indices.length / 2)
-            leftIndices = indices.slice(0, mid)
-            rightIndices = indices.slice(mid)
+            // Fallback to median split
+            const mid = Math.floor(nodeIndices.length / 2);
+            leftIndices = nodeIndices.slice(0, mid);
+            rightIndices = nodeIndices.slice(mid);
         } else {
-            leftIndices = indices.slice(0, splitIndex)
-            rightIndices = indices.slice(splitIndex)
+            // Sort along the chosen axis
+            nodeIndices.sort((a, b) => {
+                const centerA = this.nodes[a].aabb.getCenter()[axis];
+                const centerB = this.nodes[b].aabb.getCenter()[axis];
+                return centerA - centerB;
+            });
+            
+            leftIndices = nodeIndices.slice(0, splitIndex);
+            rightIndices = nodeIndices.slice(splitIndex);
         }
-    
-        // Recursively build child nodes
-        const leftChild = this._buildRecursiveWithSAH(leftIndices)
-        const rightChild = this._buildRecursiveWithSAH(rightIndices)
-    
-        // Create a new internal node
-        const leftAABB = this.m_tlasNodes[leftChild].aabb
-        const rightAABB = this.m_tlasNodes[rightChild].aabb
-        const parentAABB = this._combineAABB(leftAABB, rightAABB)
-    
-        const parentNode: TLASNode = {
+        
+        // Recursively build left and right subtrees
+        const leftChildIdx = this.buildHierarchy(leftIndices);
+        const rightChildIdx = this.buildHierarchy(rightIndices);
+        
+        // Create a parent node
+        const parentAABB = new AABB();
+        parentAABB.expandByAABB(this.nodes[leftChildIdx].aabb);
+        parentAABB.expandByAABB(this.nodes[rightChildIdx].aabb);
+        
+        const parentIdx = this.nodeCount++;
+        this.nodes[parentIdx] = {
             aabb: parentAABB,
-            left: leftChild,
-            right: rightChild,
-            blas: 0, // Internal nodes do not reference a BLAS
+            left: leftChildIdx,
+            right: rightChildIdx,
+            blasInstanceIndex: -1 // Not a leaf node
+        };
+        
+        return parentIdx;
+    }
+    
+    /**
+     * Find the best split plane using Surface Area Heuristic
+     */
+    private findBestSplit(nodeIndices: number[]): { axis: number, splitIndex: number } {
+        let bestCost = Infinity;
+        let bestAxis = -1;
+        let bestSplitIndex = -1;
+        
+        // Try each axis
+        for (let axis = 0; axis < 3; axis++) {
+            // Sort along this axis
+            nodeIndices.sort((a, b) => {
+                const centerA = this.nodes[a].aabb.getCenter()[axis];
+                const centerB = this.nodes[b].aabb.getCenter()[axis];
+                return centerA - centerB;
+            });
+            
+            // Precompute left-to-right and right-to-left AABBs
+            const leftAABBs: AABB[] = new Array(nodeIndices.length);
+            const rightAABBs: AABB[] = new Array(nodeIndices.length);
+            
+            // Left to right
+            let leftAABB = new AABB();
+            for (let i = 0; i < nodeIndices.length; i++) {
+                leftAABB = leftAABB.clone();
+                leftAABB.expandByAABB(this.nodes[nodeIndices[i]].aabb);
+                leftAABBs[i] = leftAABB;
+            }
+            
+            // Right to left
+            let rightAABB = new AABB();
+            for (let i = nodeIndices.length - 1; i >= 0; i--) {
+                rightAABB = rightAABB.clone();
+                rightAABB.expandByAABB(this.nodes[nodeIndices[i]].aabb);
+                rightAABBs[i] = rightAABB;
+            }
+            
+            // Try each split position
+            for (let i = 1; i < nodeIndices.length; i++) {
+                const leftCount = i;
+                const rightCount = nodeIndices.length - i;
+                
+                // Calculate SAH cost
+                const leftSA = leftAABBs[i - 1].surfaceArea();
+                const rightSA = rightAABBs[i].surfaceArea();
+                
+                const cost = leftSA * leftCount + rightSA * rightCount;
+                
+                if (cost < bestCost) {
+                    bestCost = cost;
+                    bestAxis = axis;
+                    bestSplitIndex = i;
+                }
+            }
         }
-    
-        this.m_tlasNodes[this.m_nodeUsed] = parentNode
-        const parentIdx = this.m_nodeUsed++
-        return parentIdx
+        
+        return { axis: bestAxis, splitIndex: bestSplitIndex };
     }
     
-    private _computeSurfaceArea (aabb: AABB): number {
-        const extent = vec3.sub(vec3.create(), aabb.bmax, aabb.bmin)
-        return 2 * (extent[0] * extent[1] + extent[1] * extent[2] + extent[2] * extent[0])
-    }
-    
-    private _combineAABB (aabb1: AABB, aabb2: AABB): AABB {
-        const combined = new AABB()
-        combined.bmin = vec3.min(vec3.create(), aabb1.bmin, aabb2.bmin)
-        combined.bmax = vec3.max(vec3.create(), aabb1.bmax, aabb2.bmax)
-        return combined
+    /**
+     * Get the flattened array of nodes for GPU upload
+     */
+    getNodes(): TLASNode[] {
+        return this.nodes.slice(0, this.nodeCount);
     }
 }

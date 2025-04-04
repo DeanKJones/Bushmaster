@@ -68,12 +68,12 @@ export class UIManager {
         toggleContainer.style.zIndex = '1000';
         
         const toggleBtn = document.createElement('button');
-        toggleBtn.textContent = 'Switch to Gradient Renderer';
+        toggleBtn.textContent = 'Switch to Voxel Renderer';
         toggleBtn.addEventListener('click', () => {
-            const usingBackup = this.renderer.toggleRenderer();
-            toggleBtn.textContent = usingBackup 
-                ? 'Switch to SDF Renderer' 
-                : 'Switch to Gradient Renderer';
+            const renderMode = this.renderer.toggleRenderer();
+            toggleBtn.textContent = renderMode === 'voxel' 
+                ? 'Switch to Gradient Renderer' 
+                : 'Switch to Voxel Renderer';
         });
         
         toggleContainer.appendChild(toggleBtn);

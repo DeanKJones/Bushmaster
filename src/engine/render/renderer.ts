@@ -1,7 +1,8 @@
 import { PipelineManager } from "./pipelineDescriptors/pipelineManager";
 import { BufferManager } from "./buffers/bufferManager";
 import { RenderContext } from "./renderContext";
-
+import { VoxelScene } from "../scene/voxelScene";
+import { VoxelBufferManager } from "./buffers/voxel/voxelBufferManager";
 import { renderToScreen } from "./passes/screen";
 
 export class Renderer {
@@ -15,11 +16,16 @@ export class Renderer {
     bufferManager!: BufferManager;
     pipelineManager!: PipelineManager;
     
-    private useBackupRenderer: boolean = false;
+    // Voxel rendering related properties
+    voxelScene: VoxelScene | null = null;
+    voxelBufferManager: VoxelBufferManager | null = null;
+    
+    // Render mode selection
+    private renderMode: 'default' | 'voxel' = 'default';
 
     // Camera parameters
     private camera = {
-        position: [0, 3, 5] as [number, number, number],
+        position: [0, 3, -5] as [number, number, number],
         target: [0, 0, 0] as [number, number, number],
         up: [0, 1, 0] as [number, number, number],
         fov: 60 * Math.PI / 180,
@@ -37,9 +43,30 @@ export class Renderer {
     async Initialize() {
         await this.setupDevice();
         this.bufferManager = new BufferManager(this.device, this.canvas);
+        
+        // Initialize without voxel scene first
         this.pipelineManager = new PipelineManager(this.device, this.bufferManager);
         
+        // Initialize voxel scene
+        await this.initializeVoxelScene();
+        
         this.initialized = true;
+    }
+    
+    /**
+     * Initialize the voxel scene and related resources
+     */
+    private async initializeVoxelScene() {
+        // Create the voxel scene
+        this.voxelScene = new VoxelScene();
+        this.voxelScene.createDemoScene();
+        
+        // Initialize voxel buffer manager
+        this.voxelBufferManager = new VoxelBufferManager(this.device, this.voxelScene);
+        this.voxelBufferManager.initialize();
+        
+        // Now update the pipeline manager with voxel pipeline
+        this.pipelineManager.updateVoxelPipeline(this.bufferManager, this.voxelBufferManager);
     }
 
     render(deltaTime: number) {
@@ -51,11 +78,19 @@ export class Renderer {
         // Update render context
         this.renderContext?.update(deltaTime);
         
+        // Update camera for voxel rendering
+        if (this.voxelBufferManager && this.pipelineManager.voxelPipeline) {
+            this.pipelineManager.voxelPipeline.updateCamera(
+                this.camera.position,
+                this.camera.target
+            );
+        }
+        
         // Choose rendering method
-        if (this.useBackupRenderer) {
-            this.renderDefault(); // test compute shader pipeline
+        if (this.renderMode === 'voxel' && this.voxelBufferManager) {
+            this.renderVoxels();
         } else {
-            this.renderDefault(); // nothing at the moment
+            this.renderDefault();
         }
     }
     
@@ -73,16 +108,46 @@ export class Renderer {
         ray_trace_pass.end();
         
         renderToScreen(commandEncoder, 
-                       this.pipelineManager.screenPipeline.screenBindGroup, 
+                       this.pipelineManager.screenPipeline.screenBindGroup,
+                       this.device,
+                       this.context,
+                       this.pipelineManager);
+    }
+    
+    /**
+     * Render the scene using voxel raytracing
+     */
+    renderVoxels() {
+        if (!this.voxelBufferManager || !this.pipelineManager.voxelPipeline) {
+            console.warn("Voxel rendering not initialized");
+            return;
+        }
+        
+        const commandEncoder = this.device.createCommandEncoder();
+        
+        // Run the voxel raytracer compute shader
+        const ray_trace_pass = commandEncoder.beginComputePass();
+        ray_trace_pass.setPipeline(this.pipelineManager.voxelPipeline.voxelComputePipeline);
+        ray_trace_pass.setBindGroup(0, this.pipelineManager.voxelPipeline.voxelBindGroup);
+        
+        // Calculate dispatch size based on 8x8 workgroups
+        const workgroupSizeX = Math.ceil(this.canvas.width * 4 / 8);
+        const workgroupSizeY = Math.ceil(this.canvas.height * 4 / 8);
+        ray_trace_pass.dispatchWorkgroups(workgroupSizeX, workgroupSizeY, 1);
+        ray_trace_pass.end();
+        
+        // Render to screen
+        renderToScreen(commandEncoder, 
+                       this.pipelineManager.screenPipeline.screenBindGroup,
                        this.device,
                        this.context,
                        this.pipelineManager);
     }
     
     // Toggle method returns the current rendering mode
-    public toggleRenderer(): boolean {
-        this.useBackupRenderer = !this.useBackupRenderer;
-        return this.useBackupRenderer;
+    public toggleRenderer(): string {
+        this.renderMode = this.renderMode === 'default' ? 'voxel' : 'default';
+        return this.renderMode;
     }
 
     async setupDevice() {
@@ -137,5 +202,14 @@ export class Renderer {
 
     getCamera() {
         return this.camera;
+    }
+    
+    /**
+     * Updates the camera position
+     */
+    updateCamera(position: [number, number, number], target: [number, number, number], up: [number, number, number] = [0, 1, 0]) {
+        this.camera.position = position;
+        this.camera.target = target;
+        this.camera.up = up;
     }
 }

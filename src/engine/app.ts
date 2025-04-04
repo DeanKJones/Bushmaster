@@ -3,14 +3,17 @@ import { Renderer } from "./render/renderer";
 import { EventSystem } from "./events/eventSystem";
 import { RenderContext } from "./render/renderContext";
 import { CameraController } from "./events/cameraController";
+import { VoxelEngine } from "./voxel/voxelEngine";
 
 export class App {
     private canvases: Map<string, HTMLCanvasElement>;
 
     private uiManager: UIManager;
-
     private renderer: Renderer;
     private renderContext: RenderContext;
+    
+    // The voxel engine that manages our voxel scene
+    private voxelEngine: VoxelEngine;
 
     private initialized: boolean = false;
     private lastTime: number = performance.now();
@@ -30,13 +33,20 @@ export class App {
         this.renderer = new Renderer(mainViewport!, this.renderContext);
         this.uiManager = new UIManager(undefined, this.renderContext, this.renderer);
         
+        // Create voxel engine instance
+        this.voxelEngine = new VoxelEngine(this.renderer);
+        
         // Expose key components for debugging in the console
         (window as any).app = this;
+        (window as any).voxelEngine = this.voxelEngine;
         
         // Start renderer initialization
-        this.renderer.Initialize().then(() => {
+        this.renderer.Initialize().then(async () => {
+            // Initialize the voxel engine
+            await this.initializeVoxelEngine();
+            
             this.initialized = true;
-            console.log("Renderer initialized successfully");
+            console.log("Engine initialized successfully");
             
             // Initialize camera controller
             this.initializeCameraController();
@@ -45,6 +55,18 @@ export class App {
         }).catch(error => {
             console.error("Failed to initialize renderer:", error);
         });
+    }
+    
+    /**
+     * Initialize the voxel engine and set up voxel rendering
+     */
+    private async initializeVoxelEngine() {
+        try {
+            await this.voxelEngine.initialize();
+            console.log("Voxel engine initialized successfully");
+        } catch (error) {
+            console.error("Failed to initialize voxel engine:", error);
+        }
     }
     
     private initializeCameraController() {
@@ -76,8 +98,8 @@ export class App {
         // Update render context with frame data
         this.renderContext.update(deltaTime);
         
-        // Update active voxel models
-        // This would be where we process voxel operations in a real implementation
+        // Update the voxel engine
+        this.voxelEngine.update(deltaTime);
         
         // Render the scene
         this.renderer.render(deltaTime);
