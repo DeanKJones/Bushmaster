@@ -2,6 +2,8 @@ import { PipelineManager } from "./pipelineDescriptors/pipelineManager";
 import { BufferManager } from "./buffers/bufferManager";
 import { RenderContext } from "./renderContext";
 
+import { renderToScreen } from "./passes/screen";
+
 export class Renderer {
     canvas: HTMLCanvasElement;
     
@@ -70,7 +72,11 @@ export class Renderer {
         );
         ray_trace_pass.end();
         
-        this.renderToScreen(commandEncoder, this.pipelineManager.screenPipeline.screenBindGroup);
+        renderToScreen(commandEncoder, 
+                       this.pipelineManager.screenPipeline.screenBindGroup, 
+                       this.device,
+                       this.context,
+                       this.pipelineManager);
     }
     
     // Toggle method returns the current rendering mode
@@ -127,27 +133,6 @@ export class Renderer {
         } catch (error) {
             console.error("Error during WebGPU setup:", error);
         }
-    }
-        
-    private renderToScreen(commandEncoder: GPUCommandEncoder, bindGroup: GPUBindGroup) {
-        const renderPassDescriptor: GPURenderPassDescriptor = {
-            colorAttachments: [
-                {
-                    view: this.context.getCurrentTexture().createView(),
-                    loadOp: 'clear',
-                    storeOp: 'store',
-                    clearValue: { r: 0.05, g: 0.05, b: 0.05, a: 1.0 }
-                }
-            ]
-        };
-        
-        const renderPass = commandEncoder.beginRenderPass(renderPassDescriptor);
-        renderPass.setPipeline(this.pipelineManager.screenPipeline.screenPipeline);
-        renderPass.setBindGroup(0, bindGroup);
-        renderPass.draw(6, 1, 0, 0);
-        renderPass.end();
-        
-        this.device.queue.submit([commandEncoder.finish()]);
     }
 
     getCamera() {
