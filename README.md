@@ -23,7 +23,7 @@ To get started with this project, follow these steps:
 1. Clone the repository:
     ```sh
     git clone https://github.com/DeanKJones/Bushmaster.git
-    cd Optics
+    cd Bushmaster
     ```
 
 2. Install the dependencies:
