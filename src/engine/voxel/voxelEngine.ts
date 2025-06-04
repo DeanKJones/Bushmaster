@@ -1,6 +1,7 @@
 import { VoxelScene } from '../scene/voxelScene';
 import { VoxelBufferManager } from '../render/buffers/voxel/voxelBufferManager';
 import { Renderer } from '../render/renderer';
+import { Voxel } from './voxel';
 
 /**
  * Main interface for voxel engine operations.
@@ -68,5 +69,42 @@ export class VoxelEngine {
      */
     getBufferManager(): VoxelBufferManager | null {
         return this.bufferManager;
+    }
+
+    /**
+     * Load a MagicaVoxel .vox model and add it to the scene
+     */
+    async loadVoxModel(id: string, url: string): Promise<void> {
+        const { loadVox } = await import('./util/voxLoader');
+        const voxData = await loadVox(url);
+        const colorToMaterial = new Map<number, number>();
+        const voxels = [] as import('./voxel').Voxel[];
+
+        for (const v of voxData.voxels) {
+            let matIdx = colorToMaterial.get(v.colorIndex);
+            if (matIdx === undefined) {
+                const color = voxData.palette[v.colorIndex - 1] || { r: 255, g: 255, b: 255, a: 255 };
+                matIdx = this.scene.materials.length;
+                this.scene.materials.push({
+                    color: [color.r / 255, color.g / 255, color.b / 255],
+                    roughness: 0.5,
+                    metalness: 0.0,
+                    emission: [0, 0, 0],
+                    emissionStrength: 0
+                });
+                colorToMaterial.set(v.colorIndex, matIdx);
+            }
+            voxels.push(new Voxel([v.x, v.y, v.z], 1, matIdx, 0));
+        }
+
+        this.scene.createBLAS(id, voxels);
+        this.scene.blasInstances.push({
+            transform: [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],
+            transformInverse: [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],
+            blasOffset: this.scene.getBlasOffset(id),
+            materialIdx: 0
+        });
+        this.scene.buildTLAS();
+        this.bufferManager?.updateBuffers();
     }
 }
